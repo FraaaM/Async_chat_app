@@ -9,37 +9,34 @@ event_loop = None
 connection_reader = None
 connection_writer = None
 nickname = None
-chatrooms = []
-chat_history = {}  # Хранение истории переписки по комнатам
-
+chatrooms = []  # Список всех комнат
+users = []  # Список всех пользователей
+chat_history = {} 
 
 async def listen_to_server(reader, chat_area, user_list, room_list):
-    """Постоянно получает сообщения от сервера."""
+    """Receive messages from the server and update UI."""
     while True:
-        message = await reader.read(100)
+        message = await reader.read(1024) 
         if not message:
             break
 
-        decoded_message = message.decode()
-        if decoded_message.startswith("Users in"):
+        decoded_message = message.decode().strip()
+        if decoded_message.startswith("Users:"):
+            users = decoded_message[7:].strip()
             user_list.config(state=tk.NORMAL)
             user_list.delete(1.0, tk.END)
-            user_list.insert(tk.END, decoded_message + '\n')
+            user_list.insert(tk.END, users + '\n')
             user_list.config(state=tk.DISABLED)
         elif decoded_message.startswith("Rooms:"):
+            rooms = decoded_message[7:].strip()
             room_list.config(state=tk.NORMAL)
             room_list.delete(1.0, tk.END)
-            room_list.insert(tk.END, decoded_message + '\n')
+            room_list.insert(tk.END, rooms + '\n')
             room_list.config(state=tk.DISABLED)
-            global chatrooms
-            chatrooms = decoded_message[7:].split(", ")  # Обновляем список комнат
         else:
-            chat_area.insert(tk.END, f"{decoded_message}\n")
+            current_room_name = room_list.get("1.0", tk.END).strip().split("\n")[0]  # Первая комната как текущая
+            chat_area.insert(tk.END, f"[{current_room_name}] {decoded_message}\n")
             chat_area.see(tk.END)
-            room_name = current_room.get()
-            if room_name not in chat_history:
-                chat_history[room_name] = []
-            chat_history[room_name].append(decoded_message)
 
 
 async def send_message(writer, content):
@@ -136,13 +133,11 @@ rooms_frame.pack(side="right", fill="y", padx=5, pady=5)
 chatrooms_display = scrolledtext.ScrolledText(rooms_frame, wrap=tk.WORD, state=tk.DISABLED, height=10, bg="#f9f9f9")
 chatrooms_display.pack(fill="both", expand=True)
 
-# Центральная часть с чатом
 chat_display_frame = tk.LabelFrame(chat_frame, text="Chat")
 chat_display_frame.pack(fill="both", expand=True, padx=5, pady=5)
 chat_display = scrolledtext.ScrolledText(chat_display_frame, wrap=tk.WORD, state=tk.NORMAL, bg="#ffffff")
 chat_display.pack(fill="both", expand=True)
 
-# Нижняя часть с вводом текста
 input_frame = tk.Frame(chat_frame)
 input_frame.pack(fill="x", padx=5, pady=5)
 
@@ -158,6 +153,7 @@ file_button.pack(side="right", padx=5)
 
 send_button = tk.Button(input_frame, text="Send", command=send_text, bg="#4CAF50", fg="white")
 send_button.pack(side="right", padx=5)
+
 
 # Connection dialog
 connection_window = tk.Toplevel(main_window)

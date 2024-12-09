@@ -5,13 +5,14 @@ from tkinter import filedialog, scrolledtext
 from datetime import datetime
 import os
 
+
 event_loop = None
 connection_reader = None
 connection_writer = None
 nickname = None
 chatrooms = []  # Список всех комнат
 users = []  # Список всех пользователей
-chat_history = {} 
+chat_history = {}
 
 async def listen_to_server(reader, chat_area, user_list, room_list):
     """Receive messages from the server and update UI."""
@@ -38,7 +39,6 @@ async def listen_to_server(reader, chat_area, user_list, room_list):
             chat_area.insert(tk.END, f"[{current_room_name}] {decoded_message}\n")
             chat_area.see(tk.END)
 
-
 async def send_message(writer, content):
     """Отправляет текстовое сообщение серверу."""
     timestamp = datetime.now().strftime("%H:%M:%S")
@@ -46,19 +46,50 @@ async def send_message(writer, content):
     writer.write((formatted_message + '\n').encode())
     await writer.drain()
 
-
 def send_text():
     """Обработчик кнопки отправки сообщения."""
     text = input_box.get()
     input_box.delete(0, tk.END)
     asyncio.run_coroutine_threadsafe(send_message(connection_writer, text), event_loop)
 
-
 def send_file():
-    """Обработчик кнопки отправки файла."""
+    """Отправка файла на сервер."""
     file_path = filedialog.askopenfilename()
-    if file_path:
-        asyncio.run_coroutine_threadsafe(share_file(connection_writer, file_path), event_loop)
+    if not file_path:
+        return  
+
+    room_name = current_room.get()  
+    if not room_name:
+        print("Error: No room selected")
+        return
+
+    asyncio.run_coroutine_threadsafe(
+        send_file_task(file_path, room_name),
+        event_loop
+    )
+
+
+async def send_file_task(file_path, room_name):
+    """Асинхронная задача отправки файла."""
+    try:
+        # Уведомляем сервер о начале передачи файла
+        connection_writer.write(f"FILE:{os.path.basename(file_path)}\n".encode())
+        await connection_writer.drain()
+
+        # Отправляем размер файла
+        file_size = os.path.getsize(file_path)
+        connection_writer.write(f"{file_size}\n".encode())
+        await connection_writer.drain()
+
+        # Передаем содержимое файла по частям
+        with open(file_path, 'rb') as file:
+            while chunk := file.read(1024):
+                connection_writer.write(chunk)
+                await connection_writer.drain()
+
+        print(f"File {os.path.basename(file_path)} sent successfully.")
+    except Exception as e:
+        print(f"Error sending file: {e}")
 
 
 async def initialize_client(ip, name, chatroom):
@@ -68,7 +99,6 @@ async def initialize_client(ip, name, chatroom):
     connection_writer.write(f"{name}\n{chatroom}\n".encode())
     await connection_writer.drain()
     asyncio.create_task(listen_to_server(connection_reader, chat_display, active_users_display, chatrooms_display))
-
 
 def start_chat(ip, user_name, room_name):
     """Начинает чат, подключая клиента к серверу."""
@@ -83,7 +113,6 @@ def start_chat(ip, user_name, room_name):
     main_window.deiconify()
     connection_window.withdraw()
 
-
 async def disconnect():
     """Отключает клиента от сервера."""
     global connection_writer
@@ -94,11 +123,9 @@ async def disconnect():
     main_window.withdraw()
     connection_window.deiconify()
 
-
 def exit_chat():
     """Обработчик кнопки отключения."""
     asyncio.run_coroutine_threadsafe(disconnect(), event_loop)
-
 
 def setup_event_loop():
     """Запускает асинхронный цикл в отдельном потоке."""
@@ -107,17 +134,16 @@ def setup_event_loop():
     asyncio.set_event_loop(event_loop)
     event_loop.run_forever()
 
-
 # GUI
 main_window = tk.Tk()
-main_window.geometry("800x600")
+main_window.geometry("900x700")
 main_window.title("Async Chat Client")
 main_window.withdraw()
 
 chat_frame = tk.Frame(main_window)
 chat_frame.pack(fill="both", expand=True)
 
-# Верхняя часть с активными пользователями и комнатами
+
 top_frame = tk.Frame(chat_frame)
 top_frame.pack(fill="x", padx=5, pady=5)
 
@@ -158,6 +184,7 @@ send_button.pack(side="right", padx=5)
 # Connection dialog
 connection_window = tk.Toplevel(main_window)
 connection_window.title("Connect to Chat Server")
+connection_window.geometry("300x200")
 
 tk.Label(connection_window, text="Server IP:").pack(pady=5)
 ip_entry = tk.Entry(connection_window)
@@ -174,7 +201,6 @@ room_entry.pack()
 
 current_room = tk.StringVar()
 
-
 def connect():
     global nickname
     ip = ip_entry.get()
@@ -183,7 +209,6 @@ def connect():
     if ip and name and room:
         nickname = name
         start_chat(ip, name, room)
-
 
 connect_button = tk.Button(connection_window, text="Connect", command=connect, bg="#4CAF50", fg="white")
 connect_button.pack(pady=10)

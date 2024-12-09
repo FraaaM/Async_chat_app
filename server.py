@@ -1,10 +1,9 @@
 import asyncio
 
-connected_clients = {}
 clients_mutex = asyncio.Lock()
 chatrooms = set()
-all_users = set()
-
+connected_clients = {}  # Словарь, где ключ - название комнаты, значение - список пользователей
+all_users = set()  # Для всех пользователей в системе
 
 async def client_handler(reader, writer):
     client_address = writer.get_extra_info('peername')
@@ -22,7 +21,7 @@ async def client_handler(reader, writer):
             all_users.add(user_name)
 
         await notify_rooms()
-        await notify_all_users()
+        await notify_users_in_room(room_name)
 
         await broadcast_message(room_name, f"{user_name} has joined the room.")
 
@@ -50,22 +49,20 @@ async def client_handler(reader, writer):
                 all_users.discard(user_name)
 
         await notify_rooms()
-        await notify_all_users()
+        await notify_users_in_room(room_name)
         await broadcast_message(room_name, f"{user_name} has left the room.")
 
         writer.close()
         await writer.wait_closed()
 
-
-async def notify_all_users():
-    """Notify all clients about the list of all users."""
-    user_list = f"Users: {', '.join(all_users)}\n"
-    async with clients_mutex:
-        for room_clients in connected_clients.values():
-            for _, writer in room_clients:
-                writer.write(user_list.encode())
-                await writer.drain()
-
+async def notify_users_in_room(room_name):
+    """Notify users in a specific room about the current users in the room."""
+    if room_name in connected_clients:
+        users_in_room = ', '.join([user for user, _ in connected_clients[room_name]])
+        user_list = f"Users: {users_in_room}\n"
+        for _, writer in connected_clients[room_name]:
+            writer.write(user_list.encode())
+            await writer.drain()
 
 async def notify_rooms():
     """Notify all clients about the list of all chatrooms."""
@@ -76,7 +73,6 @@ async def notify_rooms():
                 writer.write(room_list.encode())
                 await writer.drain()
 
-
 async def broadcast_message(room, message):
     """Broadcast a message to all users in a specific room."""
     async with clients_mutex:
@@ -84,7 +80,6 @@ async def broadcast_message(room, message):
             for _, writer in connected_clients[room]:
                 writer.write(f"{message}\n".encode())
                 await writer.drain()
-
 
 async def handle_file_transfer(reader, filename, sender_name, room):
     await broadcast_message(room, f"{sender_name} is sharing a file: {filename}")
@@ -106,12 +101,10 @@ async def handle_file_transfer(reader, filename, sender_name, room):
 
     await broadcast_message(room, f"File upload complete: {filename}")
 
-
 async def start_server():
     server = await asyncio.start_server(client_handler, '127.0.0.1', 8888)
     print(f"Server started on {server.sockets[0].getsockname()}")
     async with server:
         await server.serve_forever()
-
 
 asyncio.run(start_server())

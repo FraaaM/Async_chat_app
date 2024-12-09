@@ -17,7 +17,7 @@ chat_history = {}
 async def listen_to_server(reader, chat_area, user_list, room_list):
     """Receive messages from the server and update UI."""
     while True:
-        message = await reader.read(1024) 
+        message = await reader.read(1024)
         if not message:
             break
 
@@ -35,9 +35,9 @@ async def listen_to_server(reader, chat_area, user_list, room_list):
             room_list.insert(tk.END, rooms + '\n')
             room_list.config(state=tk.DISABLED)
         else:
-            current_room_name = room_list.get("1.0", tk.END).strip().split("\n")[0]  # Первая комната как текущая
-            chat_area.insert(tk.END, f"[{current_room_name}] {decoded_message}\n")
+            chat_area.insert(tk.END, f"[{current_room.get()}] {decoded_message}\n")
             chat_area.see(tk.END)
+
 
 async def send_message(writer, content):
     """Отправляет текстовое сообщение серверу."""
@@ -67,7 +67,6 @@ def send_file():
         send_file_task(file_path, room_name),
         event_loop
     )
-
 
 async def send_file_task(file_path, room_name):
     """Асинхронная задача отправки файла."""
@@ -102,7 +101,7 @@ async def initialize_client(ip, name, chatroom):
 
 def start_chat(ip, user_name, room_name):
     """Начинает чат, подключая клиента к серверу."""
-    current_room.set(room_name)
+    current_room.set(room_name)  # Устанавливаем текущую комнату
     if room_name in chat_history:
         chat_display.delete(1.0, tk.END)
         chat_display.insert(tk.END, "\n".join(chat_history[room_name]) + "\n")
